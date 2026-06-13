@@ -1,5 +1,5 @@
 /**
- * Error contract. The body shape is documented in docs/ERRORS.md and parsed by
+ * Error contract. The body shape is `{ error: { code, message } }`, parsed by
  * `@parserelay/client`'s `ParseRelayError`.
  */
 export type ErrorCode =
