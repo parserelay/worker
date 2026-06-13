@@ -1,0 +1,52 @@
+# ParseRelay self-host worker — the public scan core.
+#
+# Deploy to YOUR OWN Cloudflare account:
+#   1. Set your keys:  wrangler secret put ANTHROPIC_API_KEY   (and/or OPENAI_API_KEY)
+#                      wrangler secret put GLM_OCR_API_KEY      (or MISTRAL_API_KEY)
+#                      wrangler secret put API_KEYS             (comma-separated keys you accept)
+#   2. wrangler deploy
+# That's it — POST /v1/scan is live. No database, no accounts, no billing.
+name = "parserelay-worker"
+main = "src/worker.ts"
+compatibility_date = "2026-05-01"
+# The Anthropic/OpenAI SDKs import Node built-ins (node:fs/promises, etc.).
+compatibility_flags = ["nodejs_compat"]
+
+[dev]
+port = 8200
+
+[observability]
+enabled = true
+
+# ACCESS CONTROL (self-host): `API_KEYS` is the ONLY gate — set it to the keys you
+# accept (omit and ANY non-empty key is accepted, fine for local dev only). There is
+# no built-in rate limiting, spend cap, or durable usage metering in the self-host
+# core: the request counter is in-memory, per-isolate, and resets on eviction, so it
+# never enforces anything. Put this worker behind your own gateway/WAF if you need
+# quotas, or add a control-plane adapter to enforce metered accounts and per-key caps.
+#
+# Secrets (set with `wrangler secret put <NAME>`), not committed:
+#   API_KEYS           comma-separated keys the worker accepts (omit to accept any non-empty key in dev)
+#   RELAY_HMAC_SECRET  HMAC key for signing relay webhook payloads (only if you use relay)
+#   ANTHROPIC_API_KEY  model key for the vision engine
+#   OPENAI_API_KEY     model key for the vision engine
+#   GLM_OCR_API_KEY    preferred OCR backend (powers `auto`)
+#   MISTRAL_API_KEY    fallback OCR backend
+#
+# Optional async-relay bindings (Workers PAID plan) — degrades to inline best-effort when absent:
+#   wrangler queues create parserelay-relay
+#   wrangler kv namespace create DEDUPE
+# then uncomment:
+#
+# [[kv_namespaces]]
+# binding = "DEDUPE"
+# id = "<id>"
+#
+# [[queues.producers]]
+# binding = "RELAY_QUEUE"
+# queue = "parserelay-relay"
+#
+# [[queues.consumers]]
+# queue = "parserelay-relay"
+# max_retries = 8
+# dead_letter_queue = "parserelay-relay-dlq"

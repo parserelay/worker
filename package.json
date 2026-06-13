@@ -1,0 +1,30 @@
+{
+  "name": "@parserelay/worker",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Self-hostable ParseRelay scan worker (Cloudflare Workers + Hono) — the public scan core. Bring your own model/OCR keys; no database required.",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
+  },
+  "files": ["src"],
+  "publishConfig": { "access": "public" },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
+    "@parserelay/core": "workspace:*",
+    "hono": "^4.6.0",
+    "openai": "^6.39.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "typescript": "^5.4.0",
+    "vitest": "^3.0.0",
+    "wrangler": "^4.0.0"
+  }
+}
