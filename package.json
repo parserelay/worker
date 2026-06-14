@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
-    "@parserelay/core": "workspace:*",
+    "@parserelay/core": "^0.1.0",
     "hono": "^4.6.0",
     "openai": "^6.39.1"
   },
