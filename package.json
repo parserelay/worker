@@ -1,6 +1,7 @@
 {
   "name": "@parserelay/worker",
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "description": "Self-hostable ParseRelay scan worker (Cloudflare Workers + Hono) — the public scan core. Bring your own model/OCR keys; no database required.",
   "exports": {
