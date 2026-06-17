@@ -162,6 +162,11 @@ async function runOnePage(req: ScanRequest, opts: RunOpts): Promise<RunResult> {
   const modelUsd = output.modelCostUsd ?? 0; // provider sticker cost of the model call(s)
 
   if (opts.preview) {
+    // The OCR backend ran for real (it's how would_rescue is computed) and always on
+    // our key, so a dry run bills exactly that — the same loaded-cost→credit map a
+    // real scan uses. The plumbing + model figures are previews of a real run, not
+    // charged. 0 when no OCR ran (passthrough / vision / OCR failed).
+    const ocrCredits = ocrUsage ? round((ocrUsd * MODEL_TAX_MULT) / CREDIT_USD) : 0;
     return {
       scan_id: scanId,
       status: "dry_run",
@@ -170,6 +175,7 @@ async function runOnePage(req: ScanRequest, opts: RunOpts): Promise<RunResult> {
       // estimate (we never call the model on a dry run). BYO runs the model on
       // the caller's key, so they carry zero model credits — never estimate them.
       scan_credits: 1,
+      ...(ocrCredits > 0 ? { ocr_credits: ocrCredits } : {}),
       ...(wouldRescue.length > 0 && !byok
         ? { estimated_model_credits: ESTIMATED_CALL_CREDITS }
         : {}),
@@ -257,11 +263,13 @@ function mergeDryRuns(pages: ScanDryRun[], scanId: string): ScanDryRun {
     }
   }
   const estimate = pages.reduce((s, p) => s + (p.estimated_model_credits ?? 0), 0);
+  const ocrCredits = round(pages.reduce((s, p) => s + (p.ocr_credits ?? 0), 0));
   return {
     scan_id: scanId,
     status: "dry_run",
     would_rescue: wouldRescue,
     scan_credits: pages.length, // 1 plumbing credit per page
+    ...(ocrCredits > 0 ? { ocr_credits: ocrCredits } : {}),
     ...(estimate > 0 ? { estimated_model_credits: estimate } : {}),
   } satisfies ScanDryRun;
 }

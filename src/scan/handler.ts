@@ -47,17 +47,17 @@ export function createScanRoute(adapter: ControlPlaneAdapter = NO_CONTROL_PLANE)
 
     const req = validateScanRequest(body);
 
-    // Credit gate. A dry run is a free preview (no model call, no debit), so it's
-    // never gated. Otherwise atomically RESERVE the plumbing charge before doing any
-    // work — pay-per-scan with no overdraft, no TOCTOU. settleScan reconciles the
-    // hold after the run (refund on failure, charge the model remainder on success).
-    if (account && req.dry_run !== true) {
-      // One plumbing credit per page (multi-page = req.image + req.pages).
-      const reserved = await adapter.reserveCredits(
-        env,
-        account.accountId,
-        1 + (req.pages?.length ?? 0),
-      );
+    // Credit gate. Atomically RESERVE a hold BEFORE doing any work — pay-per-scan
+    // with no overdraft, no TOCTOU. One credit per page (multi-page = req.image +
+    // req.pages). settleScan/settleDryRun reconciles the hold after the run.
+    //
+    // A dry run is gated too: it runs OCR for real (on our key) to compute
+    // would_rescue, so it has a real cost — an ungated dry run is a free way to burn
+    // our OCR budget. It bills only the OCR it consumes (settleDryRun refunds the
+    // rest of the hold), never the plumbing or model.
+    const held = 1 + (req.pages?.length ?? 0);
+    if (account) {
+      const reserved = await adapter.reserveCredits(env, account.accountId, held);
       // A DB error is a 500, NOT a false "out of credits" — don't tell a funded
       // account to top up because of a momentary blip.
       if (reserved === "error") throw new AppError("internal", "Could not reserve credits.");
@@ -105,6 +105,17 @@ export function createScanRoute(adapter: ControlPlaneAdapter = NO_CONTROL_PLANE)
 
     // dry_run takes precedence over relay: always inline, nothing posted.
     if (result.status === "dry_run") {
+      // Reconcile the hold: charge the OCR the dry run actually ran, refund the rest.
+      // Best-effort (like settleScan) — the preview still returns even if the write
+      // hiccups; we log it. settleDryRun is idempotent on scan_id.
+      if (account) {
+        const err = await adapter.settleDryRun(env, account.accountId, {
+          scanId: result.scan_id,
+          held,
+          credits: result.ocr_credits ?? 0,
+        });
+        if (err) console.error("dry run settle failed", err, { scan_id: result.scan_id });
+      }
       return c.json(result, 200);
     }
 
