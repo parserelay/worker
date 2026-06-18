@@ -302,6 +302,26 @@ describe("runScan", () => {
     expect(r.would_rescue.length).toBeGreaterThan(0); // the rescue gate did fire
     expect(r.scan_credits).toBe(1);
     expect(r.estimated_model_credits).toBeUndefined(); // BYO → model runs on caller's key
+    expect(r.ocr_credits).toBeUndefined(); // fakeOcr reports no cost → nothing to bill
+  });
+
+  it("dry run bills the OCR it actually ran (ocr_credits, the loaded-cost map)", async () => {
+    const req: ScanRequest = {
+      image: "data:,",
+      dry_run: true,
+      schema: ["merchant"],
+    };
+    const costUsd = 0.0002; // ~a GLM-OCR page
+    const r = await runScan(req, {
+      preview: true,
+      env: {},
+      resolveOcr: fakeOcrWithCost("Merchant: Acme", costUsd),
+    });
+    expect(r.status).toBe("dry_run");
+    if (r.status !== "dry_run") return;
+    // Same loaded-cost→credit map a real scan uses: (usd × 1.15 tax) ÷ $0.002/credit.
+    expect(r.ocr_credits).toBeCloseTo((costUsd * 1.15) / 0.002, 6);
+    expect(r.scan_credits).toBe(1); // plumbing is a preview, not charged
   });
 
   it("ocr+check structures every field via the model and self-checks", async () => {

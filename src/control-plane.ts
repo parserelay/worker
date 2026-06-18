@@ -37,6 +37,19 @@ export interface ScanSettlement {
   fields: number;
 }
 
+/**
+ * A dry run reconciliation. The gate reserves `held` credits before the run; a dry
+ * run actually costs only `credits` (the OCR it ran to produce `would_rescue`), so
+ * the adapter refunds the difference — net charge = `credits`. Idempotent on `scanId`.
+ */
+export interface DryRunSettlement {
+  scanId: string;
+  /** Credits the gate reserved up front (1 per page). */
+  held: number;
+  /** OCR credits the dry run actually consumed (the net charge). */
+  credits: number;
+}
+
 /** A decrypted BYO provider key + which provider it's for (aligned with the model before use). */
 export interface ProviderKey {
   key: string;
@@ -63,6 +76,16 @@ export interface ControlPlaneAdapter {
   reserveCredits(env: Bindings, accountId: string, amount: number): Promise<boolean | "error">;
   /** Record a completed scan + reconcile the reserved hold. Returns a SettleError (logged) on failure, else null. */
   settleScan(env: Bindings, accountId: string, usage: ScanSettlement): Promise<SettleError | null>;
+  /**
+   * Reconcile a dry run: charge the OCR it consumed and refund the rest of the
+   * reserved hold (idempotent on scanId). Best-effort like `settleScan` — returns a
+   * SettleError (logged) on failure, else null.
+   */
+  settleDryRun(
+    env: Bindings,
+    accountId: string,
+    settlement: DryRunSettlement,
+  ): Promise<SettleError | null>;
   /** Decrypt the BYO provider key paired to this account, or null → fall back to credits. */
   loadProviderKey(
     env: Bindings,
@@ -77,5 +100,6 @@ export const NO_CONTROL_PLANE: ControlPlaneAdapter = {
   resolveCaller: async () => null,
   reserveCredits: async () => true,
   settleScan: async () => null,
+  settleDryRun: async () => null,
   loadProviderKey: async () => null,
 };
